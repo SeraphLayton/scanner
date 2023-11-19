@@ -136,8 +136,7 @@ def get_user_input_port():
 
 def display_usage():
     print(banner)
-    print(Fore.YELLOW + "Usage: " + Fore.MAGENTA + "python script_name.py " + Fore.GREEN + "<target IP/domain> " + Fore.BLUE + " [wordlist_path]" + Style.RESET_ALL)
-    print(Fore.YELLOW + "Example: " + Fore.MAGENTA + "python script_name.py " + Fore.GREEN + "8.8.8.8 " + Fore.BLUE + "wordlist.txt -p 80,443" + Style.RESET_ALL)
+    print(Fore.MAGENTA + "Something went wrong")
 
 try:
     choice = get_user_choice()
