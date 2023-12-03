@@ -1,6 +1,7 @@
 import sys
 import dns.resolver
 import nmap
+import requests
 from colorama import init, Fore, Style
 
 init()
@@ -110,6 +111,41 @@ def nmap_scan(target, ports, save_to_file):
 
     except Exception as e:
         print(Fore.RED + f"An error occurred during port scanning: {e}" + Style.RESET_ALL)
+        
+        
+def vhost_enumeration(target, wordlist_path, save_to_file):
+    try:
+        subdomains = load_wordlist(wordlist_path)
+
+        found_vhosts = []
+
+        for subdomain in subdomains:
+            headers = {'Host': f"{subdomain}.{target}"}
+            url = f"http://{target}"  # Assuming you want to target the base domain
+
+            response = requests.get(url, headers=headers, allow_redirects=False)
+            if response.status_code == 200:  # change if needed 
+                found_vhosts.append(f"{subdomain}.{target}")
+                print(Fore.GREEN + f"Found VHost: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
+            elif response.status_code == 301 or response.status_code == 302: 
+                found_vhosts.append(f"{subdomain}.{target}")
+                print(Fore.GREEN + f"Redirect found, possible vhost at: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
+            #elif response.status_code == 404: 
+            #    print(Fore.RED + f"Vhost not found: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)    # <- More verbose
+            elif response.status_code != 404:
+                print(Fore.YELLOW + f"Interesting Status code: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
+
+        if save_to_file:
+            filename = f"results_{target}_vhosts.txt"
+            with open(filename, 'w') as file:
+                for vhost in found_vhosts:
+                    file.write(f"Found VHost: {vhost} - Response Code: {response.status_code}\n")
+
+        return found_vhosts
+    except Exception as e:
+        print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
+        return [] 
+
 
 def parse_ports(port_arg):
     if '-' in port_arg:
@@ -131,8 +167,9 @@ def get_user_choice():
     print(banner)
     print(Fore.YELLOW + "Select Scan Type:")
     print(Fore.MAGENTA + "1. DNS Scan")
-    print("2. Port Scan" + Style.RESET_ALL)
-    choice = input("Enter your choice (1/2): ")
+    print("2. Port Scan")
+    print("3. Vhost scan" + Style.RESET_ALL)
+    choice = input("Enter your choice (1,2 or 3): ")
     return choice
 
 def get_user_input_dns():
@@ -147,11 +184,21 @@ def get_user_input_dns():
 def get_user_input_port():
     try:
         target = input("Enter the target IP/domain: ")
-        port_input = input("Enter port(s) separated by commas or a port range (e.g., 80,443 or 1-1024): ")
+        port_input = input("Enter port(s) separated by commas or a port range (e.g. 22 or 80,443 or 1-1024): ")
         return target, port_input
     except KeyboardInterrupt:
         print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
         return None, None
+        
+def get_user_input_vhost():
+    try:
+        target = input("Enter the target domain: ")
+        wordlist_path = input("Enter the wordlist file path: ")
+        return target, wordlist_path
+    except KeyboardInterrupt:
+        print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
+        return None, None
+    
 
 def ask_to_save():
     while True:
@@ -175,8 +222,13 @@ try:
             save_to_file = ask_to_save()
             ports = parse_ports(port_input)
             nmap_scan(target, ports, save_to_file)
+    elif choice == '3':
+        target, wordlist_path = get_user_input_vhost()
+        if target is not None and wordlist_path is not None:
+            save_to_file = ask_to_save()
+            vhost_enumeration(target, wordlist_path, save_to_file)
     else:
-        print(Fore.RED + "Invalid choice! Please select either '1' or '2'." + Style.RESET_ALL)
+        print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3'." + Style.RESET_ALL)
 except ValueError as ve:
     print(Fore.RED + f"Error: {ve}" + Style.RESET_ALL)
 except Exception as e:
