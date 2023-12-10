@@ -2,9 +2,11 @@ import sys
 import dns.resolver
 import nmap
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from colorama import init, Fore, Style
 
 init()
+
 
 banner = """ 
 ┓          
@@ -27,7 +29,6 @@ Year: 2023
 
 
 
-
 def load_wordlist(wordlist_path):
     try:
         with open(wordlist_path, 'r') as file:
@@ -37,14 +38,36 @@ def load_wordlist(wordlist_path):
         print(Fore.RED + f"Wordlist file not found at: {wordlist_path}" + Style.RESET_ALL)
         return []
 
+def resolve_domain(full_domain):
+    try:
+        answers = dns.resolver.resolve(full_domain, 'A')
+        for answer in answers:
+            print(Fore.GREEN + f"Found Subdomain: {full_domain} - IP: {answer}" + Style.RESET_ALL)
+        return full_domain
+    except dns.resolver.NXDOMAIN:
+        print(Fore.RED + f"Subdomain not found: {full_domain}" + Style.RESET_ALL)
+        return None
+    except dns.resolver.NoAnswer:
+        print(Fore.RED + f"No A records found for {full_domain}" + Style.RESET_ALL)
+        return None
+
+def check_vhost(subdomain, target):
+    headers = {'Host': f"{subdomain}.{target}"}
+    url = f"http://{target}"  # Assuming you want to target the base domain!
+
+    response = requests.get(url, headers=headers, allow_redirects=False)
+    if response.status_code == 200 or response.status_code == 301 or response.status_code == 302:
+        print(Fore.GREEN + f"Found VHost: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        return f"{subdomain}.{target}"
+    elif response.status_code != 404:
+        print(Fore.YELLOW + f"Interesting Status code: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        return None
+    return None
+
+
 def find_subdomains(target, wordlist_path, save_to_file):
     try:
-        subdomains = load_wordlist(wordlist_path)
-
-        found_subdomains = []
-
-        for subdomain in subdomains:
-            full_domain = f"{subdomain}.{target}"
+        def resolve_domain(full_domain):
             try:
                 answers = dns.resolver.resolve(full_domain, 'A')
                 for answer in answers:
@@ -55,25 +78,34 @@ def find_subdomains(target, wordlist_path, save_to_file):
             except dns.resolver.NoAnswer:
                 print(Fore.RED + f"No A records found for {full_domain}" + Style.RESET_ALL)
 
+        subdomains = load_wordlist(wordlist_path)
+        found_subdomains = []
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(resolve_domain, f"{subdomain}.{target}"): subdomain for subdomain in subdomains}
+
+            for future in futures:
+                future.result()
+
         if save_to_file:
             filename = f"results_{target}_dns.txt"
             with open(filename, 'w') as file:
-                sys.stdout = file
                 for subdomain in found_subdomains:
-                    print(f"Found Subdomain: {subdomain}")
-            sys.stdout = sys.__stdout__
+                    file.write(f"Found Subdomain: {subdomain}\n")
 
         return found_subdomains
+
     except Exception as e:
         print(Fore.RED + f"An error occurred during subdomain enumeration: {e}" + Style.RESET_ALL)
         return []
+
+
 
 def nmap_scan(target, ports, save_to_file):
     try:
         output_data = []
 
-        for port in ports:
-            print(f"Scanning port: {port}")  # (<- more verbose)
+        def scan(port):
             nm = nmap.PortScanner()
             nm.scan(target, arguments=f'-sC -sV -T5 -p {port}')  # Make adjustments if needed!
             for host in nm.all_hosts():
@@ -103,49 +135,43 @@ def nmap_scan(target, ports, save_to_file):
                                         output_data.append(f"  {script_name}:")
                                         output_data.append(f"    {script_output}")
 
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(scan, port): port for port in ports}
+
+            for future in futures:
+                future.result()
+        
         if save_to_file:
             filename = f"results_{target}_ports.txt"
             with open(filename, 'w') as file:
                 for line in output_data:
                     file.write(line + '\n')
-
     except Exception as e:
         print(Fore.RED + f"An error occurred during port scanning: {e}" + Style.RESET_ALL)
-        
-        
+
 def vhost_enumeration(target, wordlist_path, save_to_file):
     try:
         subdomains = load_wordlist(wordlist_path)
-
         found_vhosts = []
 
-        for subdomain in subdomains:
-            headers = {'Host': f"{subdomain}.{target}"}
-            url = f"http://{target}"  # Assuming you want to target the base domain
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(check_vhost, subdomain, target): subdomain for subdomain in subdomains}
 
-            response = requests.get(url, headers=headers, allow_redirects=False)
-            if response.status_code == 200:  # change if needed 
-                found_vhosts.append(f"{subdomain}.{target}")
-                print(Fore.GREEN + f"Found VHost: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
-            elif response.status_code == 301 or response.status_code == 302: 
-                found_vhosts.append(f"{subdomain}.{target}")
-                print(Fore.GREEN + f"Redirect found, possible vhost at: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
-            #elif response.status_code == 404: 
-            #    print(Fore.RED + f"Vhost not found: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)    # <- More verbose
-            elif response.status_code != 404:
-                print(Fore.YELLOW + f"Interesting Status code: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
-
+            for future in futures:
+                result = future.result()
+                if result:
+                    found_vhosts.append(result)
+        
         if save_to_file:
             filename = f"results_{target}_vhosts.txt"
             with open(filename, 'w') as file:
                 for vhost in found_vhosts:
-                    file.write(f"Found VHost: {vhost} - Response Code: {response.status_code}\n")
+                    file.write(f"Found VHost: {vhost}\n")
 
         return found_vhosts
     except Exception as e:
         print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
         return [] 
-
 
 def parse_ports(port_arg):
     if '-' in port_arg:
@@ -155,14 +181,7 @@ def parse_ports(port_arg):
         return list(map(int, port_arg.split(',')))
     else:
         return [int(port_arg)]
-
-def get_port_list():
-    if '-p' in sys.argv:
-        port_index = sys.argv.index('-p') + 1
-        return parse_ports(sys.argv[port_index])
-    else:
-        return [i for i in range(1, 65536)]  # Make adjustments if needed!
-
+        
 def get_user_choice():
     print(banner)
     print(Fore.YELLOW + "Select Scan Type:")
@@ -233,3 +252,7 @@ except ValueError as ve:
     print(Fore.RED + f"Error: {ve}" + Style.RESET_ALL)
 except Exception as e:
     print(Fore.RED + f"An error occurred: {e}" + Style.RESET_ALL)
+except KeyboardInterrupt:
+    print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
+        
+
