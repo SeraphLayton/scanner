@@ -187,8 +187,9 @@ def get_user_choice():
     print(Fore.YELLOW + "Select Scan Type:")
     print(Fore.MAGENTA + "1. DNS Scan")
     print("2. Port Scan")
-    print("3. Vhost scan" + Style.RESET_ALL)
-    choice = input("Enter your choice (1,2 or 3): ")
+    print("3. Vhost Scan" )
+    print("4. Full Scan" + Style.RESET_ALL)
+    choice = input("Enter your choice (1,2,3 or 4): ")
     return choice
 
 def get_user_input_dns():
@@ -246,6 +247,14 @@ try:
         if target is not None and wordlist_path is not None:
             save_to_file = ask_to_save()
             vhost_enumeration(target, wordlist_path, save_to_file)
+    elif choice == '4':
+        target, wordlist_path = get_user_input_dns()
+        if target is not None and wordlist_path is not None:
+            ports = '1-1024'
+            save_to_file = ask_to_save()
+            found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
+            vhost_enumeration(target, wordlist_path, save_to_file)
+            nmap_scan(target, ports, save_to_file)
     else:
         print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3'." + Style.RESET_ALL)
 except ValueError as ve:
