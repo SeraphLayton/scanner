@@ -28,7 +28,7 @@ Year: 2023
 """
 
 
-
+# loading of a wordlist 
 def load_wordlist(wordlist_path):
     try:
         with open(wordlist_path, 'r') as file:
@@ -38,6 +38,7 @@ def load_wordlist(wordlist_path):
         print(Fore.RED + f"Wordlist file not found at: {wordlist_path}" + Style.RESET_ALL)
         return []
 
+# resolving domain via dns resolver
 def resolve_domain(full_domain):
     try:
         answers = dns.resolver.resolve(full_domain, 'A')
@@ -51,6 +52,7 @@ def resolve_domain(full_domain):
         print(Fore.RED + f"No A records found for {full_domain}" + Style.RESET_ALL)
         return None
 
+# vhost checking. looking for status code 200, 301 or 302. Adjustable!
 def check_vhost(subdomain, target):
     headers = {'Host': f"{subdomain}.{target}"}
     url = f"http://{target}"  # Assuming you want to target the base domain!
@@ -65,6 +67,7 @@ def check_vhost(subdomain, target):
     return None
 
 
+#Subdomain finding from loaded wordlist
 def find_subdomains(target, wordlist_path, save_to_file):
     try:
         def resolve_domain(full_domain):
@@ -100,7 +103,7 @@ def find_subdomains(target, wordlist_path, save_to_file):
         return []
 
 
-
+#nmap scan. Arguments Adjustable! (T5 sometimes to much noise)
 def nmap_scan(target, ports, save_to_file):
     try:
         output_data = []
@@ -149,6 +152,8 @@ def nmap_scan(target, ports, save_to_file):
     except Exception as e:
         print(Fore.RED + f"An error occurred during port scanning: {e}" + Style.RESET_ALL)
 
+
+#vhost enumeration function
 def vhost_enumeration(target, wordlist_path, save_to_file):
     try:
         subdomains = load_wordlist(wordlist_path)
@@ -173,6 +178,7 @@ def vhost_enumeration(target, wordlist_path, save_to_file):
         print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
         return [] 
 
+#port parse from terminal
 def parse_ports(port_arg):
     if '-' in port_arg:
         port_range = port_arg.split('-')
@@ -181,7 +187,8 @@ def parse_ports(port_arg):
         return list(map(int, port_arg.split(',')))
     else:
         return [int(port_arg)]
-        
+
+# user choice menu
 def get_user_choice():
     print(banner)
     print(Fore.YELLOW + "Select Scan Type:")
@@ -192,6 +199,7 @@ def get_user_choice():
     choice = input("Enter your choice (1,2,3 or 4): ")
     return choice
 
+# user terminal input domain
 def get_user_input_dns():
     try:
         target = input("Enter the target IP/domain: ")
@@ -200,7 +208,8 @@ def get_user_input_dns():
     except KeyboardInterrupt:
         print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
         return None, None
-        
+
+#user terminal input port
 def get_user_input_port():
     try:
         target = input("Enter the target IP/domain: ")
@@ -219,7 +228,7 @@ def get_user_input_vhost():
         print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
         return None, None
     
-
+# ask to safe to file
 def ask_to_save():
     while True:
         save_option = input("Do you want to save the results to a file? (yes/no): ").lower()
@@ -231,26 +240,26 @@ def ask_to_save():
 try:
     choice = get_user_choice()
 
-    if choice == '1':
+    if choice == '1': # DNS SUBDOMAIN
         target, wordlist_path = get_user_input_dns()
         if target is not None and wordlist_path is not None:
             save_to_file = ask_to_save()
             found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
-    elif choice == '2':
+    elif choice == '2': # NMAP SCAN
         target, port_input = get_user_input_port()
         if target is not None and port_input is not None:
             save_to_file = ask_to_save()
             ports = parse_ports(port_input)
             nmap_scan(target, ports, save_to_file)
-    elif choice == '3':
+    elif choice == '3': # VHOST ENUM
         target, wordlist_path = get_user_input_vhost()
         if target is not None and wordlist_path is not None:
             save_to_file = ask_to_save()
             vhost_enumeration(target, wordlist_path, save_to_file)
-    elif choice == '4':
+    elif choice == '4': #ALL SCANS 
         target, wordlist_path = get_user_input_dns()
         if target is not None and wordlist_path is not None:
-            ports = '1-1024'
+            ports = '1-1024' #Adjustable!!
             save_to_file = ask_to_save()
             found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
             vhost_enumeration(target, wordlist_path, save_to_file)
