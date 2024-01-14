@@ -18,13 +18,13 @@ banner = """
 
 """
 This script can perform an automated nmap scan for single domains, find other subdomains or vhosts. I use this for hackthebox challenges. 
-It focuses on flexibility and customization as it is not faster than other tools (yet). Future implementations will come along. 
+It focuses on flexibility and customization. Future implementations will come along. 
 The goal is to create a good enumeration tool for hackthebox challenges.
 
 Created by: Layton
 GitHub: https://github.com/SeraphLayton
 Website: https://seraphlayton.github.io/Website
-Year: 2023
+Year: 2024
 """
 
 
@@ -259,13 +259,15 @@ try:
     elif choice == '4': #ALL SCANS 
         target, wordlist_path = get_user_input_dns()
         if target is not None and wordlist_path is not None:
-            ports = '1-1024' #Adjustable!!
+            port_input = '21,22,25,53,80,8080,110,123,143,443,465,631,993,995,3306,3389,23,20,67,68,137,161,162,69,5060,1723,8000,8081,4567,8082,81' #Adjustable!! (some commmon ports per default)
             save_to_file = ask_to_save()
+            ports = parse_ports(port_input)
             found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
             vhost_enumeration(target, wordlist_path, save_to_file)
             nmap_scan(target, ports, save_to_file)
+
     else:
-        print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3'." + Style.RESET_ALL)
+        print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3' or '4'." + Style.RESET_ALL)
 except ValueError as ve:
     print(Fore.RED + f"Error: {ve}" + Style.RESET_ALL)
 except Exception as e:
