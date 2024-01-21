@@ -65,6 +65,22 @@ def check_vhost(subdomain, target):
         print(Fore.YELLOW + f"Interesting Status code: {subdomain}.{target} - Response Code: {response.status_code}" + Style.RESET_ALL)
         return None
     return None
+    
+    
+# FUZZZING
+def fuzzer(subdomain, target):
+	
+    headers = {}
+    url = f"http://{target}/{subdomain}"  
+
+    response = requests.get(url, headers=headers, allow_redirects=True) #Adjust if needed (consider turning redirects=True)
+    if response.status_code == 200 or response.status_code == 301 or response.status_code == 302:
+        print(Fore.GREEN + f"Found url: {target}/{subdomain} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        return f"http://{target}/{subdomain}"
+    elif response.status_code != 404:
+        print(Fore.YELLOW + f"Interesting Status code: {target}/{subdomain} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        return None
+    return None
 
 
 #Subdomain finding from loaded wordlist
@@ -177,6 +193,31 @@ def vhost_enumeration(target, wordlist_path, save_to_file):
     except Exception as e:
         print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
         return [] 
+        
+#FUZZING        
+def fuzzing_enumeration(target, wordlist_path, save_to_file):
+    try:
+        subdomains = load_wordlist(wordlist_path)
+        found_urls = []
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(fuzzer, subdomain, target): subdomain for subdomain in subdomains}
+
+            for future in futures:
+                result = future.result()
+                if result:
+                    found_urls.append(result)
+        
+        if save_to_file:
+            filename = f"results_{target}_urls.txt"
+            with open(filename, 'w') as file:
+                for vhost in found_vhosts:
+                    file.write(f"Found URL: http://{target}/{vhost}\n")
+
+        return found_vhosts
+    except Exception as e:
+        print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
+        return [] 
 
 #port parse from terminal
 def parse_ports(port_arg):
@@ -228,6 +269,8 @@ def get_user_input_vhost():
         print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
         return None, None
     
+    
+
 # ask to safe to file
 def ask_to_save():
     while True:
@@ -265,6 +308,11 @@ try:
             found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
             vhost_enumeration(target, wordlist_path, save_to_file)
             nmap_scan(target, ports, save_to_file)
+    elif choice == '5': # VHOST ENUM
+        target, wordlist_path = get_user_input_vhost()
+        if target is not None and wordlist_path is not None:
+            save_to_file = ask_to_save()
+            fuzzing_enumeration(target, wordlist_path, save_to_file)
 
     else:
         print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3' or '4'." + Style.RESET_ALL)
