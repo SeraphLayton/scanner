@@ -17,7 +17,7 @@ banner = """
 
 
 """
-This script can perform an automated nmap scan for single domains, find other subdomains or vhosts. I use this for hackthebox challenges. 
+This script can perform an automated nmap scan for single domains, find other subdomains, vhosts or fuzz directorys. I use this for hackthebox challenges. 
 It focuses on flexibility and customization. Future implementations will come along. 
 The goal is to create a good enumeration tool for hackthebox challenges.
 
@@ -68,17 +68,17 @@ def check_vhost(subdomain, target):
     
     
 # FUZZZING
-def fuzzer(subdomain, target):
+def fuzzer(directory, target):
 	
     headers = {}
-    url = f"http://{target}/{subdomain}"  
+    url = f"http://{target}/{directory}"  
 
-    response = requests.get(url, headers=headers, allow_redirects=True) #Adjust if needed (consider turning redirects=True)
+    response = requests.get(url, headers=headers, allow_redirects=True) #Adjust if needed (consider turning redirects=False)
     if response.status_code == 200 or response.status_code == 301 or response.status_code == 302:
-        print(Fore.GREEN + f"Found url: {target}/{subdomain} - Response Code: {response.status_code}" + Style.RESET_ALL)
-        return f"http://{target}/{subdomain}"
+        print(Fore.GREEN + f"Found url: {target}/{directory} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        return f"http://{target}/{directory}"
     elif response.status_code != 404:
-        print(Fore.YELLOW + f"Interesting Status code: {target}/{subdomain} - Response Code: {response.status_code}" + Style.RESET_ALL)
+        print(Fore.YELLOW + f"Interesting Status code: {target}/{directory} - Response Code: {response.status_code}" + Style.RESET_ALL)
         return None
     return None
 
@@ -197,11 +197,11 @@ def vhost_enumeration(target, wordlist_path, save_to_file):
 #FUZZING        
 def fuzzing_enumeration(target, wordlist_path, save_to_file):
     try:
-        subdomains = load_wordlist(wordlist_path)
+        directorys = load_wordlist(wordlist_path)
         found_urls = []
 
         with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(fuzzer, subdomain, target): subdomain for subdomain in subdomains}
+            futures = {executor.submit(fuzzer, directory, target): directory for directory in directorys}
 
             for future in futures:
                 result = future.result()
@@ -211,12 +211,12 @@ def fuzzing_enumeration(target, wordlist_path, save_to_file):
         if save_to_file:
             filename = f"results_{target}_urls.txt"
             with open(filename, 'w') as file:
-                for vhost in found_vhosts:
-                    file.write(f"Found URL: http://{target}/{vhost}\n")
+                for url in found_urls:
+                    file.write(f"Found URL: http://{target}/{url}\n")
 
-        return found_vhosts
+        return found_urls
     except Exception as e:
-        print(Fore.RED + f"An error occurred during VHost enumeration: {e}" + Style.RESET_ALL)
+        print(Fore.RED + f"An error occurred during fuzzing: {e}" + Style.RESET_ALL)
         return [] 
 
 #port parse from terminal
@@ -236,8 +236,9 @@ def get_user_choice():
     print(Fore.MAGENTA + "1. DNS Scan")
     print("2. Port Scan")
     print("3. Vhost Scan" )
-    print("4. Full Scan" + Style.RESET_ALL)
-    choice = input("Enter your choice (1,2,3 or 4): ")
+    print("4. Full Scan" )
+    print("5. Fuzzing" + Style.RESET_ALL)
+    choice = input("Enter your choice (1,2,3,4 or 5): ")
     return choice
 
 # user terminal input domain
@@ -269,7 +270,15 @@ def get_user_input_vhost():
         print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
         return None, None
     
-    
+  
+def get_user_input_fuzzing():
+    try:
+        target = input("Enter the target domain: ")
+        wordlist_path = input("Enter the wordlist file path: ")
+        return target, wordlist_path
+    except KeyboardInterrupt:
+        print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
+        return None, None
 
 # ask to safe to file
 def ask_to_save():
@@ -308,19 +317,17 @@ try:
             found_subdomains = find_subdomains(target, wordlist_path, save_to_file)
             vhost_enumeration(target, wordlist_path, save_to_file)
             nmap_scan(target, ports, save_to_file)
-    elif choice == '5': # VHOST ENUM
-        target, wordlist_path = get_user_input_vhost()
+    elif choice == '5': # FUZZING
+        target, wordlist_path = get_user_input_fuzzing()
         if target is not None and wordlist_path is not None:
             save_to_file = ask_to_save()
             fuzzing_enumeration(target, wordlist_path, save_to_file)
 
     else:
-        print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3' or '4'." + Style.RESET_ALL)
+        print(Fore.RED + "Invalid choice! Please select either '1' or '2' or '3' or '4'or '5'." + Style.RESET_ALL)
 except ValueError as ve:
     print(Fore.RED + f"Error: {ve}" + Style.RESET_ALL)
 except Exception as e:
     print(Fore.RED + f"An error occurred: {e}" + Style.RESET_ALL)
 except KeyboardInterrupt:
     print(Fore.RED + "\nUser interrupted the input process." + Style.RESET_ALL)
-        
-
